@@ -120,5 +120,9 @@ workflows:
           requires: [build-frontend]
       - test-backend:
           requires: [build-backend]
+      - scan-frontend: 
+          requires: [test-frontend]
+      - scan-backend: 
+          requires: [test-backend]
            
      
