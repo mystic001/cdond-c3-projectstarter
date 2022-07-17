@@ -181,7 +181,9 @@ jobs:
      - run:
          name: Install dependencies
          command: |
-            apk add --update ansible
+            # apk add --update ansible
+            apk add --update curl nodejs npm ansible zip
+            pip install awscli
 
      - run:
          name: Configure server
