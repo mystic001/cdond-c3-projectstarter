@@ -14,6 +14,23 @@ commands:
           #   exit 1
 
 
+
+
+
+
+
+
+  install_ansible:
+    description: install ansible
+    steps:
+      - run:
+         name: Install ansible
+         command: |
+             sudo apt update
+             sudo apt install software-properties-common -y
+             sudo add apt-repository --yes --update ppa:ansible/ansible
+             sudo apt install ansible -y
+
   destroy_environment:
     steps:
       - run:
@@ -169,21 +186,25 @@ jobs:
 
   configure-infrastructure:
     docker:
-     - image: python:3.7-alpine3.11
+    #  - image: python:3.7-alpine3.11
+       - image: cimg/base:stable
     steps:
      - checkout
      - add_ssh_keys:
-         fingerprints: ["20:14:60:55:18:b2:75:b0:37:d4:93:8b:a5:a7:6c:ab"] 
+         fingerprints: 
+            - "20:14:60:55:18:b2:75:b0:37:d4:93:8b:a5:a7:6c:ab"
 
      - attach_workspace:
           at: ~/ 
      
-     - run:
-         name: Install dependencies
-         command: |
-            # apk add --update ansible
-            apk add --update curl nodejs npm ansible zip
-            pip install awscli
+    #  - run:
+    #      name: Install dependencies
+    #      command: |
+    #         # apk add --update ansible
+    #         apk add --update curl nodejs npm ansible zip
+    #         pip install awscli
+    
+     - install-ansible
 
      - run:
          name: Configure server
