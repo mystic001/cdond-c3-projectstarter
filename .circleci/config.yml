@@ -232,7 +232,7 @@ jobs:
       # Checkout code from git
       - checkout
       - run:
-          name: Send migration results to memstash
+          name: Run migration
           command: |
             cd backend
             npm install
@@ -241,7 +241,7 @@ jobs:
 
 
       - run:
-          name: Send migration status to kvdb.io OR memstash.io
+          name: Send migration status to kvdb.io
           command: |   
               if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
               then
