@@ -343,23 +343,133 @@ jobs:
 
        - destroy_environment
        - revert-migrations
-         
-     
 
+
+
+  smoke-test:
+    docker:
+      - image: cimg/base:stable
+    steps:
+       - checkout
+       - install_nodejs
+       - install_awscli
+
+       - run:
+          name: Backend smoke test.
+          command: |
+            export BACKEND_IP=$(aws ec2 describe-instances \
+                --query 'Reservations[*].Instances[*].PublicIpAddress' \
+                --output text)
+            export API_URL="http://${BACKEND_IP}:3030"
+              # Fetch and prepare the BACKEND_IP env var
+            
+            echo "${API_URL}"
+            if curl "${API_URL}/api/status" | grep "ok"
+            then
+              return 0
+            else
+              return 1
+            fi
+
+       - run:
+          name: Frontend smoke test.
+          command: |
+             FRONTENDURL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-east-1.amazonaws.com/#/employees"            
+             echo $FRONTENDURL
+             if curl -s $FRONTENDURL | grep "Welcome"
+             then
+               return 0
+             else
+               return 1
+             fi
+
+       - destroy_environment
+       - revert-migrations
+      # Here's where you will add some code to rollback on failure
+
+
+
+  cloudfront-update:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies/ Save old workflow to kvdb.io
+          command: |
+            export OLD_WORKFLOW_ID = ${aws cloudformation \
+            list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+            --no-paginate --output text}
+            echo "Old workflow: ${OLD_WORKFLOW_ID}"
+            curl https://kvdb.io/Nq2uHvPfFKXMR4VXA9fdMo/old_workflow_id -d "${CIRCLE_WORKFLOW_ID:0:7}"
+      - run:
+          name: Update cloudfront distribution
+          command: |
+            aws cloudformation deploy \
+            --template-file .circleci/files/cloudfront.yml \
+            --stack-name InitialStack \
+            --parameter-overrides WorkflowID="udapeople-${CIRCLE_WORKFLOW_ID:0:7}" \
+            --tags project=udapeople
+            # Here's where you will add some code to rollback on failure   
+
+      - destroy_environment
+      - revert-migrations 
+
+
+  cleanup:
+    docker:
+       - image: amazon/aws-cli
+    steps:
+      # Checkout code from git
+      - checkout
+      - run:
+          name: Get old stack workflow id
+          command: |
+            # Fetch the Old workflow ID
+            export OldWorkflowID=$(aws cloudformation \
+            list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
+            --no-paginate --output text)
+            echo OldWorkflowID: "${OldWorkflowID}"
+            echo CIRCLE_WORKFLOW_ID "${CIRCLE_WORKFLOW_ID:0:7}"
+            cat ~/OldWorkflowID.txt
+            Oldworkflowid = $(cat ~/OldWorkflowID.txt)
+            echo OldWorkflowID: "${Oldworkflowid}
+            echo $Oldworkflowid 
+      - run:
+          name: Remove old stacks and files
+          command: |
+            if [[ "${CIRCLE_WORKFLOW_ID:0:7}" != "${Oldworkflowid}" ]]
+            then
+              echo "----------------Delete confrimed---------------"
+              aws s3 rm "s3://udapeople-${Oldworkflowid}" --recursive
+              aws cloudformation delete-stack --stack-name "udapeople-backend-${Oldworkflowid}"
+              aws cloudformation delete-stack --stack-name "udapeople-frontend-${Oldworkflowid}"
+            else
+             echo '..............Cannot cleanup....................'
+            fi
 
 workflows:
   default:
     jobs:
       - build-frontend
       - build-backend
+      # - test-frontend:
+      #     requires: [build-frontend]
+      # - test-backend:
+      #     requires: [build-backend]
+      # - scan-frontend: 
+      #     requires: [test-frontend]
+      # - scan-backend: 
+      #     requires: [test-backend]
+
       - test-frontend:
           requires: [build-frontend]
       - test-backend:
           requires: [build-backend]
-      - scan-frontend: 
-          requires: [test-frontend]
-      - scan-backend: 
-          requires: [test-backend]
+      - scan-backend:
+          requires: [build-backend]
+      - scan-frontend:
+          requires: [build-frontend]
       - deploy-infrastructure:
           requires: [test-frontend, test-backend, scan-frontend, scan-backend]
       - configure-infrastructure:
@@ -370,4 +480,10 @@ workflows:
           requires: [run-migrations]
       - deploy-backend:
           requires: [run-migrations]
+      - smoke-test:
+          requires: [deploy-backend, deploy-frontend]
+      - cloudfront-update:
+          requires: [smoke-test]
+      - cleanup:
+          requires: [cloudfront-update]
      
