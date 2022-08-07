@@ -23,6 +23,27 @@ commands:
             aws cloudformation delete-stack --stack-name udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}
 
 
+  install_awscli:
+   description: AWS CLI installation
+   steps:
+     - run:
+        name: AWSCLI install
+        command: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+
+  install_nodejs:
+     description: NodeJS installation
+     steps:
+      - run:
+          name: NodeJS install
+          command: |
+            curl -fsSL https://deb.nodesource.com/setup_13.x | sudo -E bash -
+            sudo apt install -y nodejs
+
+    
+
   revert-migrations:
     description: Revert the last migration if successfully run in the current workflow.
     parameters:
@@ -248,6 +269,81 @@ jobs:
               fi
       - destroy_environment
       - revert-migrations
+
+
+  deploy-frontend:
+     docker:
+       - image: cimg/base:stable
+     steps:
+       - checkout
+       - add_ssh_keys:
+          fingerprints: 
+            - "20:14:60:55:18:b2:75:b0:37:d4:93:8b:a5:a7:6c:ab"
+       - attach_workspace:
+           at: ~/ 
+       
+       - install_ansible
+       - install_nodejs
+       - install_awscli
+
+       - run:
+           name: Get backend url
+           command: |
+            # your code here
+            export BACKEND_IP=$(aws ec2 describe-instances \
+                --query 'Reservations[*].Instances[*].PublicIpAddress' \
+                --output text)
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo "${API_URL}"
+            echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+            cat frontend/.env
+       - run:
+           name: Deploy frontend objects
+           command: |
+             cd frontend
+             sudo npm install -g npm@latest
+             rm -rf node_modules
+             npm install
+             npm run build
+             aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive
+       - destroy_environment
+       - revert-migrations
+
+
+  deploy-backend:
+    docker:
+       - image: cimg/base:stable
+    steps:
+       - checkout
+       - add_ssh_keys:
+          fingerprints: 
+            - "20:14:60:55:18:b2:75:b0:37:d4:93:8b:a5:a7:6c:ab"
+       - attach_workspace:
+           at: ~/ 
+
+       - install_ansible
+       - install_nodejs
+       - install_awscli
+
+       - run:
+           name: Deploy backend
+           command: |
+            cd backend
+            npm i
+            npm run build
+            cd ..
+            cd .circleci/ansible
+            mkdir files 
+            cd files
+            tar -C ../../../backend -czvf artifact.tar.gz .
+            cd ../
+            echo "Contents of the inventory.txt file"
+            cat inventory.txt
+            ansible-playbook -i inventory.txt deploy-backend.yml
+
+       - destroy_environment
+       - revert-migrations
+         
      
 
 
@@ -265,9 +361,13 @@ workflows:
       - scan-backend: 
           requires: [test-backend]
       - deploy-infrastructure:
-          requires: [scan-frontend,scan-backend]
+          requires: [test-frontend, test-backend, scan-frontend, scan-backend]
       - configure-infrastructure:
-           requires: [deploy-infrastructure]
+          requires: [deploy-infrastructure]
       - run-migrations:
           requires: [configure-infrastructure]
+      - deploy-frontend:
+          requires: [run-migrations]
+      - deploy-backend:
+          requires: [run-migrations]
      
