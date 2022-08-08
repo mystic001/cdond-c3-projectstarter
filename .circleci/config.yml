@@ -325,24 +325,58 @@ jobs:
        - install_nodejs
        - install_awscli
 
+
+
+
+
+
+       - run:
+          name: Package Backend
+          command: |
+            cd backend
+            npm run build
+            # tar -czf artifact.tar.gz dist/* package*
+            cd ..
+            # enter backend directory and Zip the directory
+            # mv backend/artifact.tar.gz .circleci/ansible/roles/deploy/files
+            tar -C backend -czvf artifact.tar.gz .
+            mkdir -p ~/project/.circleci/ansible/roles/deploy/files/ 
+            mv artifact.tar.gz .circleci/ansible/roles/deploy/files/artifact.tar.gz
+            # cp artifact.tar.gz ~/project/.circleci/ansible/roles/deploy/files
+            # ls ~/project/.circleci/ansible/roles/deploy/files/
+            echo "Present working directory is -------"
+
        - run:
            name: Deploy backend
            command: |
-            cd backend
-            npm i
-            npm run build
-            cd ..
-            cd .circleci/ansible
-            mkdir files 
-            cd files
-            tar -C ../../../backend -czvf artifact.tar.gz .
-            cd ../
-            echo "Contents of the inventory.txt file"
-            cat inventory.txt
-            ansible-playbook -i inventory.txt deploy-backend.yml
-
-       - destroy_environment
+             export TYPEORM_MIGRATIONS_DIR=./migrations
+             export TYPEORM_ENTITIES=./modules/domain/**/*.entity{.ts,.js}
+             export TYPEORM_MIGRATIONS=./migrations/*.ts
+             cd .circleci/ansible
+             cat inventory.txt
+             ansible-playbook -i inventory.txt deploy-backend.yml
+       - destroy-environment
        - revert-migrations
+
+
+      #  - run:
+      #      name: Deploy backend
+      #      command: |
+      #       cd backend
+      #       npm i
+      #       npm run build
+      #       cd ..
+      #       cd .circleci/ansible
+      #       mkdir files 
+      #       cd files
+      #       tar -C ../../../backend -czvf artifact.tar.gz .
+      #       cd ../
+      #       echo "Contents of the inventory.txt file"
+      #       cat inventory.txt
+      #       ansible-playbook -i inventory.txt deploy-backend.yml
+
+      #  - destroy_environment
+      #  - revert-migrations
 
 
 
@@ -382,7 +416,7 @@ jobs:
                return 1
              fi
 
-      #  - destroy_environment
+       - destroy_environment
       #  - revert-migrations
       # Here's where you will add some code to rollback on failure
 
